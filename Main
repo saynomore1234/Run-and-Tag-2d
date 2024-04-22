@@ -10,25 +10,57 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.Info().current_w, pygame.display.In
 PLAYER_SIZE = 50
 TAGGER_SIZE = 50
 OBSTACLE_SIZE = 100
-PLAYER_COLOR = (255, 0, 0)  # Red
+PLAYER_COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Different colors for animation
 TAGGER_COLOR = (0, 0, 255)  # Blue
 OBSTACLE_COLOR = (0, 255, 0)  # Green
 FPS = 60
 NUM_OBSTACLES = 5
+ANIMATION_SPEED = 10  # Change the frame every 10 game ticks
 
 # Setup the display
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("Run and Tag Game")
 
+def main_menu():
+    title_font = pygame.font.Font(None, 100)
+    button_font = pygame.font.Font(None, 50)
+    title = title_font.render('Run and Tag Game', True, (255, 255, 255))
+    start_button = button_font.render('Start', True, (255, 255, 255))
+    quit_button = button_font.render('Quit', True, (255, 255, 255))
+
+    start_rect = start_button.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+    quit_rect = quit_button.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if start_rect.collidepoint(event.pos):
+                    return
+                elif quit_rect.collidepoint(event.pos):
+                    pygame.quit()
+                    sys.exit()
+
+        screen.fill((0, 0, 0))
+        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 100))
+        screen.blit(start_button, start_rect)
+        screen.blit(quit_button, quit_rect)
+        pygame.display.flip()
+
 def reset_game():
-    global player, tagger, obstacles
+    global player, tagger, obstacles, player_animation_frame
     player = {
         "rect": pygame.Rect(SCREEN_WIDTH // 2 - PLAYER_SIZE // 2, SCREEN_HEIGHT // 2 - PLAYER_SIZE // 2, PLAYER_SIZE, PLAYER_SIZE),
-        "speed": 5
+        "speed": 5,
+        "color": PLAYER_COLORS[0]
     }
+    player_animation_frame = 0
     tagger = {
         "rect": pygame.Rect(100, 100, TAGGER_SIZE, TAGGER_SIZE),
-        "speed": 3
+        "speed": 3,
+        "color": TAGGER_COLOR
     }
     obstacles = []
     for _ in range(NUM_OBSTACLES):
@@ -40,50 +72,65 @@ def reset_game():
                 obstacles.append({"rect": obstacle_rect})
                 break
 
-def move_entity(entity, direction):
-    original_pos = entity["rect"].copy()
-    if direction == 'up':
-        entity["rect"].y -= entity["speed"]
-    elif direction == 'down':
-        entity["rect"].y += entity["speed"]
-    elif direction == 'left':
-        entity["rect"].x -= entity["speed"]
-    elif direction == 'right':
-        entity["rect"].x += entity["speed"]
-
-    # Check collision with obstacles
-    if any(entity["rect"].colliderect(obstacle["rect"]) for obstacle in obstacles):
-        entity["rect"] = original_pos  # Revert to original position if collision
-
 def move_player(keys_pressed):
-    if keys_pressed[pygame.K_UP]:
-        move_entity(player, 'up')
-    if keys_pressed[pygame.K_DOWN]:
-        move_entity(player, 'down')
-    if keys_pressed[pygame.K_LEFT]:
-        move_entity(player, 'left')
-    if keys_pressed[pygame.K_RIGHT]:
-        move_entity(player, 'right')
+    global player
+    original_position = player["rect"].copy()
+    if keys_pressed[pygame.K_UP] and player["rect"].y > 0:
+        player["rect"].y -= player["speed"]
+    if keys_pressed[pygame.K_DOWN] and player["rect"].bottom < SCREEN_HEIGHT:
+        player["rect"].y += player["speed"]
+    if keys_pressed[pygame.K_LEFT] and player["rect"].x > 0:
+        player["rect"].x -= player["speed"]
+    if keys_pressed[pygame.K_RIGHT] and player["rect"].right < SCREEN_WIDTH:
+        player["rect"].x += player["speed"]
+    
+    # Check for collisions with obstacles and reset position if collided
+    for obstacle in obstacles:
+        if player["rect"].colliderect(obstacle["rect"]):
+            player["rect"] = original_position
 
 def move_tagger():
-    if tagger["rect"].x < player["rect"].x:
-        move_entity(tagger, 'right')
-    if tagger["rect"].x > player["rect"].x:
-        move_entity(tagger, 'left')
-    if tagger["rect"].y < player["rect"].y:
-        move_entity(tagger, 'down')
-    if tagger["rect"].y > player["rect"].y:
-        move_entity(tagger, 'up')
+    global tagger, player, obstacles
+    direction_x = 0
+    direction_y = 0
+    if tagger["rect"].x < player["rect"].x and tagger["rect"].right < SCREEN_WIDTH:
+        direction_x = tagger["speed"]
+    elif tagger["rect"].x > player["rect"].x and tagger["rect"].x > 0:
+        direction_x = -tagger["speed"]
+
+    if tagger["rect"].y < player["rect"].y and tagger["rect"].bottom < SCREEN_HEIGHT:
+        direction_y = tagger["speed"]
+    elif tagger["rect"].y > player["rect"].y and tagger["rect"].y > 0:
+        direction_y = -tagger["speed"]
+
+    # Try moving tagger in x direction
+    tagger["rect"].x += direction_x
+    for obstacle in obstacles:
+        if tagger["rect"].colliderect(obstacle["rect"]):
+            tagger["rect"].x -= direction_x  # Revert movement
+
+    # Try moving tagger in y direction
+    tagger["rect"].y += direction_y
+    for obstacle in obstacles:
+        if tagger["rect"].colliderect(obstacle["rect"]):
+            tagger["rect"].y -= direction_y  # Revert movement
+
+def update_animation():
+    global player_animation_frame
+    player_animation_frame += 1
+    if player_animation_frame >= len(PLAYER_COLORS) * ANIMATION_SPEED:
+        player_animation_frame = 0
+    player['color'] = PLAYER_COLORS[player_animation_frame // ANIMATION_SPEED]
 
 def check_game_over():
     return player["rect"].colliderect(tagger["rect"])
 
 def game_over_screen():
-    screen.fill((0, 0, 0))
     font = pygame.font.Font(None, 74)
     text = font.render('Game Over', True, (255, 255, 255))
-    screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100))
     retry_text = font.render('Press Y to retry or N to quit', True, (255, 255, 255))
+    screen.fill((0, 0, 0))
+    screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100))
     screen.blit(retry_text, (SCREEN_WIDTH // 2 - retry_text.get_width() // 2, SCREEN_HEIGHT // 2))
     pygame.display.flip()
 
@@ -99,6 +146,32 @@ def game_over_screen():
                     pygame.quit()
                     sys.exit()
 
+def pause_menu():
+    pause_font = pygame.font.Font(None, 74)
+    continue_text = pause_font.render('Continue (C)', True, (255, 255, 255))
+    quit_text = pause_font.render('Quit Game (Q)', True, (255, 255, 255))
+
+    continue_rect = continue_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
+    quit_rect = quit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN HEIGHT // 2 + 50))
+
+    paused = True
+    while paused:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_c:
+                    paused = False
+                elif event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+
+        screen.fill((0, 0, 0))
+        screen.blit(continue_text, continue_rect)
+        screen.blit(quit_text, quit_rect)
+        pygame.display.flip()
+
 def game_loop():
     reset_game()
     clock = pygame.time.Clock()
@@ -109,10 +182,14 @@ def game_loop():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pause_menu()
 
         keys_pressed = pygame.key.get_pressed()
         move_player(keys_pressed)
         move_tagger()
+        update_animation()
 
         if check_game_over():
             if game_over_screen():
@@ -121,12 +198,13 @@ def game_loop():
                 running = False
 
         screen.fill((0, 0, 0))
-        pygame.draw.rect(screen, PLAYER_COLOR, player["rect"])
-        pygame.draw.rect(screen, TAGGER_COLOR, tagger["rect"])
+        pygame.draw.rect(screen, player['color'], player["rect"])
+        pygame.draw.rect(screen, tagger['color'], tagger["rect"])
         for obstacle in obstacles:
             pygame.draw.rect(screen, OBSTACLE_COLOR, obstacle["rect"])
         pygame.display.flip()
         clock.tick(FPS)
 
 if __name__ == "__main__":
+    main_menu()
     game_loop()
