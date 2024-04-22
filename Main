@@ -1,5 +1,6 @@
 import pygame
 import sys
+import random
 
 # Initialize Pygame
 pygame.init()
@@ -13,14 +14,14 @@ PLAYER_COLOR = (255, 0, 0)  # Red
 TAGGER_COLOR = (0, 0, 255)  # Blue
 OBSTACLE_COLOR = (0, 255, 0)  # Green
 FPS = 60
+NUM_OBSTACLES = 5
 
 # Setup the display
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("Run and Tag Game")
 
-# Reset game entities to initial states
 def reset_game():
-    global player, tagger, obstacle
+    global player, tagger, obstacles
     player = {
         "rect": pygame.Rect(SCREEN_WIDTH // 2 - PLAYER_SIZE // 2, SCREEN_HEIGHT // 2 - PLAYER_SIZE // 2, PLAYER_SIZE, PLAYER_SIZE),
         "speed": 5
@@ -29,51 +30,54 @@ def reset_game():
         "rect": pygame.Rect(100, 100, TAGGER_SIZE, TAGGER_SIZE),
         "speed": 3
     }
-    obstacle = {
-        "rect": pygame.Rect(SCREEN_WIDTH // 3, SCREEN_HEIGHT // 3, OBSTACLE_SIZE, OBSTACLE_SIZE)
-    }
+    obstacles = []
+    for _ in range(NUM_OBSTACLES):
+        while True:
+            obstacle_rect = pygame.Rect(random.randint(0, SCREEN_WIDTH - OBSTACLE_SIZE),
+                                        random.randint(0, SCREEN_HEIGHT - OBSTACLE_SIZE),
+                                        OBSTACLE_SIZE, OBSTACLE_SIZE)
+            if not obstacle_rect.colliderect(player["rect"]) and not any(obstacle_rect.colliderect(obs["rect"]) for obs in obstacles):
+                obstacles.append({"rect": obstacle_rect})
+                break
 
-# Function to handle player movement
+def move_entity(entity, direction):
+    original_pos = entity["rect"].copy()
+    if direction == 'up':
+        entity["rect"].y -= entity["speed"]
+    elif direction == 'down':
+        entity["rect"].y += entity["speed"]
+    elif direction == 'left':
+        entity["rect"].x -= entity["speed"]
+    elif direction == 'right':
+        entity["rect"].x += entity["speed"]
+
+    # Check collision with obstacles
+    if any(entity["rect"].colliderect(obstacle["rect"]) for obstacle in obstacles):
+        entity["rect"] = original_pos  # Revert to original position if collision
+
 def move_player(keys_pressed):
     if keys_pressed[pygame.K_UP]:
-        player["rect"].y -= player["speed"]
+        move_entity(player, 'up')
     if keys_pressed[pygame.K_DOWN]:
-        player["rect"].y += player["speed"]
+        move_entity(player, 'down')
     if keys_pressed[pygame.K_LEFT]:
-        player["rect"].x -= player["speed"]
+        move_entity(player, 'left')
     if keys_pressed[pygame.K_RIGHT]:
-        player["rect"].x += player["speed"]
-    # Prevent movement through the obstacle
-    if player["rect"].colliderect(obstacle["rect"]):
-        adjust_position(keys_pressed)
+        move_entity(player, 'right')
 
-# Function to adjust position after collision
-def adjust_position(keys_pressed):
-    if keys_pressed[pygame.K_UP]:
-        player["rect"].y += player["speed"]
-    elif keys_pressed[pygame.K_DOWN]:
-        player["rect"].y -= player["speed"]
-    elif keys_pressed[pygame.K_LEFT]:
-        player["rect"].x += player["speed"]
-    elif keys_pressed[pygame.K_RIGHT]:
-        player["rect"].x -= player["speed"]
-
-# Function to move the tagger towards the player
 def move_tagger():
     if tagger["rect"].x < player["rect"].x:
-        tagger["rect"].x += tagger["speed"]
-    elif tagger["rect"].x > player["rect"].x:
-        tagger["rect"].x -= tagger["speed"]
+        move_entity(tagger, 'right')
+    if tagger["rect"].x > player["rect"].x:
+        move_entity(tagger, 'left')
     if tagger["rect"].y < player["rect"].y:
-        tagger["rect"].y += tagger["speed"]
-    elif tagger["rect"].y > player["rect"].y:
-        tagger["rect"].y -= tagger["speed"]
+        move_entity(tagger, 'down')
+    if tagger["rect"].y > player["rect"].y:
+        move_entity(tagger, 'up')
 
-# Check if the tagger has caught the player
 def check_game_over():
     return player["rect"].colliderect(tagger["rect"])
 
-# Function to display game over screen and ask if player wants to retry
 def game_over_screen():
     screen.fill((0, 0, 0))
     font = pygame.font.Font(None, 74)
@@ -90,7 +94,7 @@ def game_over_screen():
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_y:
-                    return True  # Signal to retry the game
+                    return True
                 elif event.key == pygame.K_n:
                     pygame.quit()
                     sys.exit()
@@ -109,20 +113,20 @@ def game_loop():
         keys_pressed = pygame.key.get_pressed()
         move_player(keys_pressed)
         move_tagger()
-        
+
         if check_game_over():
-            if game_over_screen():  # If true, reset the game
+            if game_over_screen():
                 reset_game()
             else:
-                running = False  # Exit game loop
+                running = False
 
-        screen.fill((0, 0, 0))  # Clear the screen
+        screen.fill((0, 0, 0))
         pygame.draw.rect(screen, PLAYER_COLOR, player["rect"])
         pygame.draw.rect(screen, TAGGER_COLOR, tagger["rect"])
-        pygame.draw.rect(screen, OBSTACLE_COLOR, obstacle["rect"])
+        for obstacle in obstacles:
+            pygame.draw.rect(screen, OBSTACLE_COLOR, obstacle["rect"])
         pygame.display.flip()
         clock.tick(FPS)
 
-# Main entry point
 if __name__ == "__main__":
     game_loop()
