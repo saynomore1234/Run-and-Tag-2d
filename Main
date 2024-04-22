@@ -1,0 +1,78 @@
+import pygame
+import sys
+
+# Initialize Pygame
+pygame.init()
+
+# Constants for the game
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+PLAYER_SIZE = 50
+TAGGER_SIZE = 50
+PLAYER_COLOR = (255, 0, 0)  # Red
+TAGGER_COLOR = (0, 0, 255)  # Blue
+FPS = 60
+
+# Setup the display
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Run and Tag Game")
+
+# Player and Tagger dictionaries
+player = {
+    "rect": pygame.Rect(375, 275, PLAYER_SIZE, PLAYER_SIZE),
+    "speed": 5
+}
+
+tagger = {
+    "rect": pygame.Rect(100, 100, TAGGER_SIZE, TAGGER_SIZE),
+    "speed": 3
+}
+
+# Function to handle player movement
+def move_player(keys_pressed):
+    if keys_pressed[pygame.K_UP]:
+        player["rect"].y -= player["speed"]
+    if keys_pressed[pygame.K_DOWN]:
+        player["rect"].y += player["speed"]
+    if keys_pressed[pygame.K_LEFT]:
+        player["rect"].x -= player["speed"]
+    if keys_pressed[pygame.K_RIGHT]:
+        player["rect"].x += player["speed"]
+
+# Function to move the tagger towards the player
+def move_tagger():
+    if tagger["rect"].x < player["rect"].x:
+        tagger["rect"].x += tagger["speed"]
+    elif tagger["rect"].x > player["rect"].x:
+        tagger["rect"].x -= tagger["speed"]
+    
+    if tagger["rect"].y < player["rect"].y:
+        tagger["rect"].y += tagger["speed"]
+    elif tagger["rect"].y > player["rect"].y:
+        tagger["rect"].y -= tagger["speed"]
+
+# Game loop
+def game_loop():
+    clock = pygame.time.Clock()
+    run = True
+
+    while run:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+        
+        keys_pressed = pygame.key.get_pressed()
+        move_player(keys_pressed)
+        move_tagger()
+
+        screen.fill((0, 0, 0))  # Clear the screen with black
+        pygame.draw.rect(screen, PLAYER_COLOR, player["rect"])  # Draw the player
+        pygame.draw.rect(screen, TAGGER_COLOR, tagger["rect"])  # Draw the tagger
+
+        pygame.display.flip()  # Update the display
+        clock.tick(FPS)
+    
+    pygame.quit()
+    sys.exit()
+
+if __name__ == "__main__":
+    game_loop()
