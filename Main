@@ -33,7 +33,56 @@ def draw_button(text, font, color, surface, x, y, width, height):
     draw_text(text, font, BLACK, surface, x + width // 2, y + height // 2)
     return button_rect
 
-# Player class
+def game_over_screen():
+    screen.fill(GREEN)
+    restart_button = draw_button('Restart', font, GRAY, screen, SCREEN_WIDTH // 2 - 55, SCREEN_HEIGHT // 2 - 25, 100, 50)
+    quit_button = draw_button('Quit', font, GRAY, screen, SCREEN_WIDTH // 2 - 55, SCREEN_HEIGHT // 2 + 35, 100, 50)
+    pygame.display.update()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if restart_button.collidepoint(mouse_pos):
+                    main()  # Restart the game completely
+                elif quit_button.collidepoint(mouse_pos):
+                    pygame.quit()
+                    sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    main()  # Restart the game completely
+                elif event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
+
+def main():
+    player = Player()
+    chaser = Chaser(player)  # Correctly passing player to chaser
+    obstacles = pygame.sprite.Group()
+    for _ in range(10):
+        obstacles.add(Obstacle())
+    all_sprites = pygame.sprite.Group(player, chaser, *obstacles)
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        all_sprites.update(obstacles)  # Ensure update method passes 'obstacles' correctly
+        if pygame.sprite.collide_rect(player, chaser):
+            game_over_screen()
+
+        screen.fill(GREEN)
+        all_sprites.draw(screen)
+        pygame.display.flip()
+        clock.tick(FPS)
+
+
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
@@ -53,98 +102,51 @@ class Player(pygame.sprite.Sprite):
             dy = -self.speed
         if keys[pygame.K_DOWN]:
             dy = self.speed
-        
+
         self.rect.x += dx
-        self.rect.clamp_ip(screen.get_rect())  # Prevent going out of bounds
+        self.rect.clamp_ip(screen.get_rect())
         if pygame.sprite.spritecollideany(self, obstacles):
             self.rect.x -= dx
-        
+
         self.rect.y += dy
         self.rect.clamp_ip(screen.get_rect())
         if pygame.sprite.spritecollideany(self, obstacles):
             self.rect.y -= dy
 
-# Chaser class
 class Chaser(pygame.sprite.Sprite):
     def __init__(self, player):
         super().__init__()
+        self.player = player  # Ensure the player is stored as an instance attribute
         self.image = pygame.Surface((30, 30))
         self.image.fill(BLACK)
         self.rect = self.image.get_rect(center=(random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)))
-        self.speed = 4
-        self.player = player
+        self.speed = 3  # Adjusted speed, modify this as needed
 
     def update(self, obstacles):
-        if self.rect.x < self.player.rect.x:
-            self.rect.x += self.speed
-        elif self.rect.x > self.player.rect.x:
-            self.rect.x -= self.speed
-        if self.rect.y < self.player.rect.y:
-            self.rect.y += self.speed
-        elif self.rect.y > self.player.rect.y:
-            self.rect.y -= self.speed
+        # Ensure 'player' is being used correctly
+        move_x = self.speed if self.rect.x < self.player.rect.x else -self.speed
+        move_y = self.speed if self.rect.y < self.player.rect.y else -self.speed
 
-# Obstacle class
+        # Attempt to move chaser along the X axis
+        original_x = self.rect.x
+        self.rect.x += move_x
+        if pygame.sprite.spritecollideany(self, obstacles):
+            self.rect.x = original_x  # Revert X movement if collision
+
+        # Attempt to move chaser along the Y axis
+        original_y = self.rect.y
+        self.rect.y += move_y
+        if pygame.sprite.spritecollideany(self, obstacles):
+            self.rect.y = original_y  # Revert Y movement if collision
+
+
 class Obstacle(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
         self.image = pygame.Surface((50, 50))
         self.image.fill(GRAY)
         self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH-50), random.randint(50, SCREEN_HEIGHT-50)))
-        pygame.draw.rect(self.image, BLACK, self.image.get_rect(), 2)  # Black border
-
-# Game over screen with buttons and keyboard options
-def game_over_screen():
-    screen.fill(GREEN)
-    restart_button = draw_button('Restart', font, GRAY, screen, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2, 100, 50)
-    quit_button = draw_button('Quit', font, GRAY, screen, SCREEN_WIDTH // 2 + 50, SCREEN_HEIGHT // 2, 100, 50)
-    pygame.display.update()
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pos = pygame.mouse.get_pos()
-                if restart_button.collidepoint(mouse_pos):
-                    return  # Exit the game_over_screen function and restart the game
-                elif quit_button.collidepoint(mouse_pos):
-                    pygame.quit()
-                    sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
-                    return  # Exit the game_over_screen function and restart the game
-                elif event.key == pygame.K_q:
-                    pygame.quit()
-                    sys.exit()
-
-# Game loop
-def game_loop():
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                pygame.quit()
-                sys.exit()
-
-        all_sprites.update(obstacles)
-        if pygame.sprite.collide_rect(player, chaser):
-            game_over_screen()
-
-        screen.fill(GREEN)
-        all_sprites.draw(screen)
-        pygame.display.flip()
-        clock.tick(FPS)
-
-# Create sprite groups and start game
-player = Player()
-chaser = Chaser(player)
-obstacles = pygame.sprite.Group()
-for _ in range(10):
-    obstacles.add(Obstacle())
-all_sprites = pygame.sprite.Group(player, chaser, *obstacles)
+        pygame.draw.rect(self.image, BLACK, self.image.get_rect(), 2)
 
 if __name__ == "__main__":
-    game_loop()
+    main()
