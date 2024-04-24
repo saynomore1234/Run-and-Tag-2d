@@ -1,210 +1,150 @@
 import pygame
-import sys
 import random
+import sys
 
 # Initialize Pygame
 pygame.init()
 
-# Constants for the game
-SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.Info().current_w, pygame.display.Info().current_h
-PLAYER_SIZE = 50
-TAGGER_SIZE = 50
-OBSTACLE_SIZE = 100
-PLAYER_COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]  # Different colors for animation
-TAGGER_COLOR = (0, 0, 255)  # Blue
-OBSTACLE_COLOR = (0, 255, 0)  # Green
+# Constants
+SCREEN_WIDTH, SCREEN_HEIGHT = 800, 600
+GREEN = (34, 177, 76)
+BLACK = (0, 0, 0)
+GRAY = (200, 200, 200)
 FPS = 60
-NUM_OBSTACLES = 5
-ANIMATION_SPEED = 10  # Change the frame every 10 game ticks
 
-# Setup the display
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
+# Screen setup
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Run and Tag Game")
+clock = pygame.time.Clock()
 
-def main_menu():
-    title_font = pygame.font.Font(None, 100)
-    button_font = pygame.font.Font(None, 50)
-    title = title_font.render('Run and Tag Game', True, (255, 255, 255))
-    start_button = button_font.render('Start', True, (255, 255, 255))
-    quit_button = button_font.render('Quit', True, (255, 255, 255))
+# Fonts
+font = pygame.font.Font(None, 36)
 
-    start_rect = start_button.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-    quit_rect = quit_button.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+def draw_text(text, font, color, surface, x, y):
+    textobj = font.render(text, True, color)
+    textrect = textobj.get_rect()
+    textrect.center = (x, y)
+    surface.blit(textobj, textrect)
 
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if start_rect.collidepoint(event.pos):
-                    return
-                elif quit_rect.collidepoint(event.pos):
-                    pygame.quit()
-                    sys.exit()
+def draw_button(text, font, color, surface, x, y, width, height):
+    button_rect = pygame.Rect(x, y, width, height)
+    pygame.draw.rect(surface, color, button_rect)
+    pygame.draw.rect(surface, BLACK, button_rect, 2)  # Black border for visibility
+    draw_text(text, font, BLACK, surface, x + width // 2, y + height // 2)
+    return button_rect
 
-        screen.fill((0, 0, 0))
-        screen.blit(title, (SCREEN_WIDTH // 2 - title.get_width() // 2, 100))
-        screen.blit(start_button, start_rect)
-        screen.blit(quit_button, quit_rect)
-        pygame.display.flip()
+# Player class
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((30, 30))
+        self.image.fill(BLACK)
+        self.rect = self.image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        self.speed = 5
 
-def reset_game():
-    global player, tagger, obstacles, player_animation_frame
-    player = {
-        "rect": pygame.Rect(SCREEN_WIDTH // 2 - PLAYER_SIZE // 2, SCREEN_HEIGHT // 2 - PLAYER_SIZE // 2, PLAYER_SIZE, PLAYER_SIZE),
-        "speed": 5,
-        "color": PLAYER_COLORS[0]
-    }
-    player_animation_frame = 0
-    tagger = {
-        "rect": pygame.Rect(100, 100, TAGGER_SIZE, TAGGER_SIZE),
-        "speed": 3,
-        "color": TAGGER_COLOR
-    }
-    obstacles = []
-    for _ in range(NUM_OBSTACLES):
-        while True:
-            obstacle_rect = pygame.Rect(random.randint(0, SCREEN_WIDTH - OBSTACLE_SIZE),
-                                        random.randint(0, SCREEN_HEIGHT - OBSTACLE_SIZE),
-                                        OBSTACLE_SIZE, OBSTACLE_SIZE)
-            if not obstacle_rect.colliderect(player["rect"]) and not any(obstacle_rect.colliderect(obs["rect"]) for obs in obstacles):
-                obstacles.append({"rect": obstacle_rect})
-                break
+    def update(self, obstacles):
+        keys = pygame.key.get_pressed()
+        dx, dy = 0, 0
+        if keys[pygame.K_LEFT]:
+            dx = -self.speed
+        if keys[pygame.K_RIGHT]:
+            dx = self.speed
+        if keys[pygame.K_UP]:
+            dy = -self.speed
+        if keys[pygame.K_DOWN]:
+            dy = self.speed
+        
+        self.rect.x += dx
+        self.rect.clamp_ip(screen.get_rect())  # Prevent going out of bounds
+        if pygame.sprite.spritecollideany(self, obstacles):
+            self.rect.x -= dx
+        
+        self.rect.y += dy
+        self.rect.clamp_ip(screen.get_rect())
+        if pygame.sprite.spritecollideany(self, obstacles):
+            self.rect.y -= dy
 
-def move_player(keys_pressed):
-    global player
-    original_position = player["rect"].copy()
-    if keys_pressed[pygame.K_UP] and player["rect"].y > 0:
-        player["rect"].y -= player["speed"]
-    if keys_pressed[pygame.K_DOWN] and player["rect"].bottom < SCREEN_HEIGHT:
-        player["rect"].y += player["speed"]
-    if keys_pressed[pygame.K_LEFT] and player["rect"].x > 0:
-        player["rect"].x -= player["speed"]
-    if keys_pressed[pygame.K_RIGHT] and player["rect"].right < SCREEN_WIDTH:
-        player["rect"].x += player["speed"]
-    
-    # Check for collisions with obstacles and reset position if collided
-    for obstacle in obstacles:
-        if player["rect"].colliderect(obstacle["rect"]):
-            player["rect"] = original_position
+# Chaser class
+class Chaser(pygame.sprite.Sprite):
+    def __init__(self, player):
+        super().__init__()
+        self.image = pygame.Surface((30, 30))
+        self.image.fill(BLACK)
+        self.rect = self.image.get_rect(center=(random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT)))
+        self.speed = 4
+        self.player = player
 
-def move_tagger():
-    global tagger, player, obstacles
-    direction_x = 0
-    direction_y = 0
-    if tagger["rect"].x < player["rect"].x and tagger["rect"].right < SCREEN_WIDTH:
-        direction_x = tagger["speed"]
-    elif tagger["rect"].x > player["rect"].x and tagger["rect"].x > 0:
-        direction_x = -tagger["speed"]
+    def update(self, obstacles):
+        if self.rect.x < self.player.rect.x:
+            self.rect.x += self.speed
+        elif self.rect.x > self.player.rect.x:
+            self.rect.x -= self.speed
+        if self.rect.y < self.player.rect.y:
+            self.rect.y += self.speed
+        elif self.rect.y > self.player.rect.y:
+            self.rect.y -= self.speed
 
-    if tagger["rect"].y < player["rect"].y and tagger["rect"].bottom < SCREEN_HEIGHT:
-        direction_y = tagger["speed"]
-    elif tagger["rect"].y > player["rect"].y and tagger["rect"].y > 0:
-        direction_y = -tagger["speed"]
+# Obstacle class
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((50, 50))
+        self.image.fill(GRAY)
+        self.rect = self.image.get_rect(center=(random.randint(50, SCREEN_WIDTH-50), random.randint(50, SCREEN_HEIGHT-50)))
+        pygame.draw.rect(self.image, BLACK, self.image.get_rect(), 2)  # Black border
 
-    # Try moving tagger in x direction
-    tagger["rect"].x += direction_x
-    for obstacle in obstacles:
-        if tagger["rect"].colliderect(obstacle["rect"]):
-            tagger["rect"].x -= direction_x  # Revert movement
-
-    # Try moving tagger in y direction
-    tagger["rect"].y += direction_y
-    for obstacle in obstacles:
-        if tagger["rect"].colliderect(obstacle["rect"]):
-            tagger["rect"].y -= direction_y  # Revert movement
-
-def update_animation():
-    global player_animation_frame
-    player_animation_frame += 1
-    if player_animation_frame >= len(PLAYER_COLORS) * ANIMATION_SPEED:
-        player_animation_frame = 0
-    player['color'] = PLAYER_COLORS[player_animation_frame // ANIMATION_SPEED]
-
-def check_game_over():
-    return player["rect"].colliderect(tagger["rect"])
-
+# Game over screen with buttons and keyboard options
 def game_over_screen():
-    font = pygame.font.Font(None, 74)
-    text = font.render('Game Over', True, (255, 255, 255))
-    retry_text = font.render('Press Y to retry or N to quit', True, (255, 255, 255))
-    screen.fill((0, 0, 0))
-    screen.blit(text, (SCREEN_WIDTH // 2 - text.get_width() // 2, SCREEN_HEIGHT // 2 - 100))
-    screen.blit(retry_text, (SCREEN_WIDTH // 2 - retry_text.get_width() // 2, SCREEN_HEIGHT // 2))
-    pygame.display.flip()
+    screen.fill(GREEN)
+    restart_button = draw_button('Restart', font, GRAY, screen, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2, 100, 50)
+    quit_button = draw_button('Quit', font, GRAY, screen, SCREEN_WIDTH // 2 + 50, SCREEN_HEIGHT // 2, 100, 50)
+    pygame.display.update()
 
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_y:
-                    return True
-                elif event.key == pygame.K_n:
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                if restart_button.collidepoint(mouse_pos):
+                    return  # Exit the game_over_screen function and restart the game
+                elif quit_button.collidepoint(mouse_pos):
                     pygame.quit()
                     sys.exit()
-
-def pause_menu():
-    pause_font = pygame.font.Font(None, 74)
-    continue_text = pause_font.render('Continue (C)', True, (255, 255, 255))
-    quit_text = pause_font.render('Quit Game (Q)', True, (255, 255, 255))
-
-    continue_rect = continue_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 50))
-    quit_rect = quit_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN HEIGHT // 2 + 50))
-
-    paused = True
-    while paused:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_c:
-                    paused = False
+                if event.key == pygame.K_r:
+                    return  # Exit the game_over_screen function and restart the game
                 elif event.key == pygame.K_q:
                     pygame.quit()
                     sys.exit()
 
-        screen.fill((0, 0, 0))
-        screen.blit(continue_text, continue_rect)
-        screen.blit(quit_text, quit_rect)
-        pygame.display.flip()
-
+# Game loop
 def game_loop():
-    reset_game()
-    clock = pygame.time.Clock()
     running = True
-
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                running = False
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    pause_menu()
 
-        keys_pressed = pygame.key.get_pressed()
-        move_player(keys_pressed)
-        move_tagger()
-        update_animation()
+        all_sprites.update(obstacles)
+        if pygame.sprite.collide_rect(player, chaser):
+            game_over_screen()
 
-        if check_game_over():
-            if game_over_screen():
-                reset_game()
-            else:
-                running = False
-
-        screen.fill((0, 0, 0))
-        pygame.draw.rect(screen, player['color'], player["rect"])
-        pygame.draw.rect(screen, tagger['color'], tagger["rect"])
-        for obstacle in obstacles:
-            pygame.draw.rect(screen, OBSTACLE_COLOR, obstacle["rect"])
+        screen.fill(GREEN)
+        all_sprites.draw(screen)
         pygame.display.flip()
         clock.tick(FPS)
 
+# Create sprite groups and start game
+player = Player()
+chaser = Chaser(player)
+obstacles = pygame.sprite.Group()
+for _ in range(10):
+    obstacles.add(Obstacle())
+all_sprites = pygame.sprite.Group(player, chaser, *obstacles)
+
 if __name__ == "__main__":
-    main_menu()
     game_loop()
